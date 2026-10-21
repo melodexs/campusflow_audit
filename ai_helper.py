@@ -1,97 +1,68 @@
-import json
 import os
-
+import json
 import requests
 
-API_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
-DB_FILE = "ticket.json"
+from dotenv import load_dotenv
 
-CATEGORIES = ["facilities", "it", "academic", "finance", "safety", "other"]
-PRIORITIES = ["low", "medium", "high"]
+load_dotenv()
+
+API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+MODEL = os.getenv("OPENROUTER_MODEL")
 
 
 def analyze_ticket(title, description):
-    """Ask the model to triage a ticket. Returns a dict or None on failure."""
-    api_key = os.getenv("OPENROUTER_API_KEY")
-    if not api_key:
-        print("OPENROUTER_API_KEY is not set.")
-        return None
+    if not API_KEY:
+        raise RuntimeError("OPENROUTER_API_KEY is missing from .env")
 
-    prompt = (
-        "You triage campus support tickets. Reply with ONLY a JSON object with keys "
-        f'"category" (one of {CATEGORIES}), "priority" (one of {PRIORITIES}) '
-        'and "summary" (max 15 words).\n\n'
-        f"Title: {title}\nDescription: {description}"
+    if not MODEL:
+        raise RuntimeError("OPENROUTER_MODEL is missing from .env")
+
+    url = "https://openrouter.ai/api/v1/chat/completions"
+
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "model": MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are an assistant for a campus ticket management system. "
+                    "Analyze the user's ticket and return valid JSON only, "
+                    "with these fields: category, priority, ai_summary, "
+                    "suggested_solution. "
+                    "Use a short category such as Network, Hardware, Software, "
+                    "Account, or Other. "
+                    "Priority must be low, medium, or high. "
+                    "Do not claim that you have fixed the problem."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Ticket title: {title}\n"
+                    f"Ticket description: {description}"
+                ),
+            },
+        ],
+        "temperature": 0.2,
+    }
+
+    response = requests.post(
+        url,
+        headers=headers,
+        json=payload,
+        timeout=60,
     )
 
-    try:
-        resp = requests.post(
-            API_URL,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": MODEL,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.2,
-            },
-            timeout=30,
-        )
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"].strip()
+    response.raise_for_status()
 
-        # Some models wrap JSON in ```json fences; strip them.
-        if content.startswith("```"):
-            content = content.strip("`")
-            if content.lower().startswith("json"):
-                content = content[4:]
-        data = json.loads(content.strip())
+    result = response.json()
 
-        category = str(data.get("category", "other")).lower()
-        priority = str(data.get("priority", "medium")).lower()
-        return {
-            "category": category if category in CATEGORIES else "other",
-            "priority": priority if priority in PRIORITIES else "medium",
-            "summary": str(data.get("summary", "")).strip(),
-        }
-    except (requests.RequestException, KeyError, IndexError, ValueError) as e:
-        print(f"AI request failed: {e}")
-        return None
+    content = result["choices"][0]["message"]["content"]
 
-
-def main():
-    print("_campusflow AI triage_")
-
-    if not os.path.exists(DB_FILE) or os.path.getsize(DB_FILE) == 0:
-        print("No tickets found. Create one with main.py first.")
-        return
-
-    with open(DB_FILE) as f:
-        tickets = json.load(f)
-
-    for t in tickets:
-        print(f"#{t['id']} [{t['status']}] {t['title']}")
-
-    try:
-        choice = int(input("\nTicket id to analyze: "))
-    except ValueError:
-        print("Please enter a number.")
-        return
-
-    ticket = next((t for t in tickets if t["id"] == choice), None)
-    if ticket is None:
-        print(f"Ticket #{choice} not found.")
-        return
-
-    print("Analyzing with AI...")
-    result = analyze_ticket(ticket["title"], ticket["description"])
-    if result:
-        print(f"\nCategory: {result['category']}")
-        print(f"Priority: {result['priority']}")
-        print(f"Summary:  {result['summary']}")
-
-
-if __name__ == "__main__":
-    main()
+    return json.loads(content)

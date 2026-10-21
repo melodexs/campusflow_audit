@@ -10,5 +10,29 @@
         "title": " tag",
         "description": " blue",
         "status": "open"
+    },
+    {
+        "id": 3,
+        "title": " okoh",
+        "description": " ejeh",
+        "status": "open"
+    },
+    {
+        "id": 4,
+        "title": " tag",
+        "description": " okof",
+        "status": "open"
+    },
+    {
+        "id": 5,
+        "title": "campus not working",
+        "description": "blue",
+        "status": "open",
+        "ai_analysis": {
+            "category": "Other",
+            "priority": "medium",
+            "ai_summary": "User reports that 'campus' is not working, with a vague description of 'blue'. No specific details about the issue, affected service, or error messages were provided.",
+            "suggested_solution": "Request additional details from the user, including the specific campus service or system that is not working, any error messages received, and steps already taken to troubleshoot. Follow up once more information is available."
+        }
     }
 ]
